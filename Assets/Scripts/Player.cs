@@ -20,6 +20,7 @@ namespace Com.Josh.Velocity
 
         public int maxHealth;
         public Camera normalCam;
+        public Camera weaponCam;
         public GameObject cameraParent;
         public Transform weaponParent;
         public Transform groundDetector;
@@ -57,17 +58,23 @@ namespace Com.Josh.Velocity
         private Weapon weapon;
 
         private bool crouched;
+
         private bool sliding;
         private float slide_time;
         private Vector3 slide_direction;
 
+        private bool isAiming;
+
         private float aimAngle;
+
+        private Vector3 normalCamTarget;
+        private Vector3 weaponCamTarget;
 
         #endregion
 
         #region Photon Callbacks
 
-        public void OnPhotonSerializeView(PhotonStream p_stream, PhotonMessageInfo p_message) //!
+        public void OnPhotonSerializeView(PhotonStream p_stream, PhotonMessageInfo p_message) 
         {
             if (p_stream.IsWriting)
             {
@@ -146,7 +153,23 @@ namespace Com.Josh.Velocity
             bool isJumping = jump && isGrounded;
             bool isSprinting = sprint && temp_vertical_move > 0 && !isJumping && isGrounded;
             bool isCrouching = crouch && !isSprinting && !isJumping && isGrounded;
-            bool isSliding = isSprinting && slide;
+
+            if(pause)
+            {
+                GameObject.Find("Pause").GetComponent<Pause>().TogglePause();
+            }
+
+            if (Pause.paused)
+            {
+                temp_horizontal_move = 0f;
+                temp_vertical_move = 0f;
+                sprint = false;
+                jump = false;
+                pause = false;
+                isGrounded = false;
+                isJumping = false;
+                isSprinting = false;
+            }
 
             //Crouching
             if (isCrouching)
@@ -157,33 +180,53 @@ namespace Com.Josh.Velocity
             //Jumping
             if (isJumping)
             {
+                if (crouched) photonView.RPC("SetCrouch", RpcTarget.All, false);
                 rig.AddForce(Vector3.up * jumpForce);
             }
 
             if (Input.GetKeyDown(KeyCode.U)) TakeDamage(100);
 
             //Head Bob
-            if (sliding)
+            if (!isGrounded)
             {
-                return;
+                //airborne
+                Headbob(idleCounter, 0.01f, 0.01f);
+                idleCounter += 0;
+                weaponParent.localPosition = Vector3.MoveTowards(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 2f * 0.2f);
+            }
+            else if (sliding)
+            {
+                //sliding
+                Headbob(movementCounter, 0.15f, 0.075f);
+                weaponParent.localPosition = Vector3.MoveTowards(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 10f * 0.2f);
             }
             else if (temp_horizontal_move == 0 && temp_vertical_move == 0)
             {
-                Headbob(idleCounter, 0.025f, 0.025f);
+                //idling
+                Headbob(idleCounter, 0.01f, 0.01f);
                 idleCounter += Time.deltaTime;
-                weaponParent.localPosition = Vector3.Lerp(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 2f);
+                weaponParent.localPosition = Vector3.MoveTowards(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 2f * 0.2f);
             }
-            else if (!isSprinting)
+            else if (!isSprinting && !crouched)
             {
-                Headbob(idleCounter, 0.035f, 0.035f);
-                idleCounter += Time.deltaTime * 3f;
-                weaponParent.localPosition = Vector3.Lerp(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 6f);
+                //walking
+                Headbob(movementCounter, 0.035f, 0.035f);
+                movementCounter += Time.deltaTime * 6f;
+                weaponParent.localPosition = Vector3.MoveTowards(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 6f * 0.2f);
+            }
+            else if (crouched)
+            {
+                //crouching
+                Headbob(movementCounter, 0.02f, 0.02f);
+                movementCounter += Time.deltaTime * 4f;
+                weaponParent.localPosition = Vector3.MoveTowards(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 6f * 0.2f);
             }
             else
             {
-                Headbob(idleCounter, 0.015f, 0.015f);
-                idleCounter += Time.deltaTime * 7f;
-                weaponParent.localPosition = Vector3.Lerp(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 10f);
+                //sprinting
+                Headbob(movementCounter, 0.15f, 0.055f);
+                movementCounter += Time.deltaTime * 13.5f;
+                weaponParent.localPosition = Vector3.MoveTowards(weaponParent.localPosition, targetWeaponBobPosition, Time.deltaTime * 10f * 0.2f);
             }
 
             //UI Refreshes
@@ -206,19 +249,15 @@ namespace Com.Josh.Velocity
             bool sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             bool jump = Input.GetKey(KeyCode.Space);
             bool slide = Input.GetKey(KeyCode.LeftControl);
-            bool pause = Input.GetKeyDown(KeyCode.Escape); //!
+            bool aim = Input.GetMouseButton(1);
+
 
             //States
             bool isGrounded = Physics.Raycast(groundDetector.position, Vector3.down, 0.1f, ground);
             bool isJumping = jump && isGrounded;
             bool isSprinting = sprint && temp_vertical_move > 0 && !isJumping && isGrounded;
             bool isSliding = isSprinting && slide && !sliding;
-
-            //Pause
-            if(pause)
-            {
-                GameObject.Find("Pause").GetComponent<Pause>().TogglePause();
-            }
+            isAiming = aim && !isSliding && !isSprinting;
 
             if (Pause.paused)
             {
@@ -226,10 +265,10 @@ namespace Com.Josh.Velocity
                 temp_vertical_move = 0f;
                 sprint = false;
                 jump = false;
-                pause = false;
                 isGrounded = false;
                 isJumping = false;
                 isSprinting = false;
+                isAiming = false;
             }
 
             //Jumping
@@ -253,6 +292,10 @@ namespace Com.Josh.Velocity
                     if (crouched) photonView.RPC("SetCrouch", RpcTarget.All, false);
                     temp_adjustedSpeed *= sprintModifier;
                 }
+                else if (crouched)
+                {
+                    temp_adjustedSpeed *= crouchModifier;
+                }
             }
             else
             {
@@ -262,7 +305,7 @@ namespace Com.Josh.Velocity
                 if (slide_time <= 0)
                 {
                     sliding = false;
-                    weaponParentCurrentPosition += Vector3.up * 0.5f;
+                    weaponParentCurrentPosition -= Vector3.down * (slideAmount - crouchAmount);
                 }
             }
 
@@ -276,27 +319,50 @@ namespace Com.Josh.Velocity
                 sliding = true;
                 slide_direction = temp_direction;
                 slide_time = lengthOfSlide;
-                weaponParentCurrentPosition += Vector3.down * 0.5f;
+                weaponParentCurrentPosition += Vector3.down * (slideAmount - crouchAmount);
+                if (!crouched) photonView.RPC("SetCrouch", RpcTarget.All, true);
             }
+
+            //Aiming
+            isAiming = weapon.Aim(isAiming);
 
             //Camera Stuff
             if (sliding)
             {
-                normalCam.fieldOfView = Mathf.Lerp(normalCam.fieldOfView, baseFOV * sprintFOVModifier * 1.25f, Time.deltaTime * 8f);
-                normalCam.transform.localPosition = Vector3.Lerp(normalCam.transform.localPosition, origin + Vector3.down * 0.5f, Time.deltaTime * 6f);
+                normalCam.fieldOfView = Mathf.Lerp(normalCam.fieldOfView, baseFOV * sprintFOVModifier * 1.15f, Time.deltaTime * 8f);
+                weaponCam.fieldOfView = Mathf.Lerp(normalCam.fieldOfView, baseFOV * sprintFOVModifier * 1.15f, Time.deltaTime * 8f);
+
+                normalCamTarget = Vector3.MoveTowards(normalCam.transform.localPosition, origin + Vector3.down * slideAmount, Time.deltaTime);
+                weaponCamTarget = Vector3.MoveTowards(weaponCam.transform.localPosition, origin + Vector3.down * slideAmount, Time.deltaTime);
             }
             else
             {
                 if (isSprinting)
                 {
                     normalCam.fieldOfView = Mathf.Lerp(normalCam.fieldOfView, baseFOV * sprintFOVModifier, Time.deltaTime * 8f);
+                    weaponCam.fieldOfView = Mathf.Lerp(weaponCam.fieldOfView, baseFOV * sprintFOVModifier, Time.deltaTime * 8f);
+                }
+                else if (isAiming)
+                {
+                    normalCam.fieldOfView = Mathf.Lerp(normalCam.fieldOfView, baseFOV * weapon.currentGunData.mainFOV, Time.deltaTime * 8f);
+                    weaponCam.fieldOfView = Mathf.Lerp(weaponCam.fieldOfView, baseFOV * weapon.currentGunData.weaponFOV, Time.deltaTime * 8f);
                 }
                 else
                 {
                     normalCam.fieldOfView = Mathf.Lerp(normalCam.fieldOfView, baseFOV, Time.deltaTime * 8f);
+                    weaponCam.fieldOfView = Mathf.Lerp(weaponCam.fieldOfView, baseFOV, Time.deltaTime * 8f);
                 }
 
-                normalCam.transform.localPosition = Vector3.Lerp(normalCam.transform.localPosition, origin, Time.deltaTime * 6f);
+                if (crouched)
+                {
+                    normalCamTarget = Vector3.MoveTowards(normalCam.transform.localPosition, origin + Vector3.down * crouchAmount, Time.deltaTime);
+                    weaponCamTarget = Vector3.MoveTowards(weaponCam.transform.localPosition, origin + Vector3.down * crouchAmount, Time.deltaTime);
+                }
+                else
+                {
+                    normalCamTarget = Vector3.MoveTowards(normalCam.transform.localPosition, origin, Time.deltaTime);
+                    weaponCamTarget = Vector3.MoveTowards(weaponCam.transform.localPosition, origin, Time.deltaTime);
+                }
             }
         }
         #endregion
@@ -317,7 +383,7 @@ namespace Com.Josh.Velocity
         void Headbob(float p_z, float p_x_intensity, float p_y_intensity)
         {
             float temp_aim_adjust = 1f;
-            if (weapon.isAiming) temp_aim_adjust = 0.1f;
+            if (isAiming) temp_aim_adjust = 0.1f;
             targetWeaponBobPosition = weaponParentCurrentPosition + new Vector3(Mathf.Cos(p_z) * p_x_intensity *temp_aim_adjust , Mathf.Sin(p_z * 2) * p_y_intensity * temp_aim_adjust, 0);
         }
 

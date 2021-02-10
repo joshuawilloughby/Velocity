@@ -10,17 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5ded62faff0608d40b6e6429e9804d0a, type: 3}
-  m_Name: M1911
+  m_Name: Pistol
   m_EditorClassIdentifier: 
   name: Pistol
   damage: 100
   ammo: 20
   burst: 0
+  pellets: 0
   clipsize: 8
+  maxClip: 8
   firerate: 0.15
-  bloom: 5
+  bloom: 0.01
   recoil: 10
   kickback: 0.15
   aimSpeed: 7
   reload: 1
+  pump: 0
+  mainFOV: 0.8
+  weaponFOV: 0.7
   prefab: {fileID: 4242954932503864138, guid: 6f1a7354265853f44b0ed5e2e43676ad, type: 3}
+  clip: 7

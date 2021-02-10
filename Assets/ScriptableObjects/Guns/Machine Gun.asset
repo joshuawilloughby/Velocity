@@ -18,10 +18,15 @@ MonoBehaviour:
   burst: 1
   pellets: 0
   clipsize: 32
+  maxClip: 32
   firerate: 0.05
   bloom: 20
-  recoil: 2
+  recoil: 0.1
   kickback: 0.01
   aimSpeed: 7
   reload: 1.3
+  pump: 0
+  mainFOV: 0.8
+  weaponFOV: 0.45
   prefab: {fileID: 2566671431827218891, guid: c4a5190cdafa5ce48b3f083def8a4d99, type: 3}
+  clip: 28

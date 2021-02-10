@@ -12,7 +12,8 @@ namespace Com.Josh.Velocity
         public static bool cursorLocked = true;
 
         public Transform player;
-        public Transform cams;
+        public Transform normalCam;
+        public Transform weaponCam;
         public Transform weapon;
 
         public float xSensitivity;
@@ -27,7 +28,7 @@ namespace Com.Josh.Velocity
 
         void Start()
         {
-            camCenter = cams.localRotation; //set rotation origin for cameras to camCenter
+            camCenter = normalCam.localRotation; //set rotation origin for cameras to camCenter
         }
 
         void Update()
@@ -46,6 +47,8 @@ namespace Com.Josh.Velocity
             SetX();
 
             UpdateCursorLock();
+
+            weaponCam.rotation = normalCam.rotation;
         }
 
         #endregion
@@ -56,14 +59,14 @@ namespace Com.Josh.Velocity
         {
             float temp_input = Input.GetAxis("Mouse Y") * ySensitivity * Time.deltaTime;
             Quaternion temp_adjust = Quaternion.AngleAxis(temp_input, -Vector3.right);
-            Quaternion temp_delta = cams.localRotation * temp_adjust;
+            Quaternion temp_delta = normalCam.localRotation * temp_adjust;
 
             if (Quaternion.Angle(camCenter, temp_delta) < maxAngle)
             {
-                cams.localRotation = temp_delta;
+                normalCam.localRotation = temp_delta;
             }
 
-            weapon.rotation = cams.rotation;
+            weapon.rotation = normalCam.rotation;
         }
 
         void SetX()

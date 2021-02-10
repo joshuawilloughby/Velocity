@@ -15,17 +15,20 @@ namespace Com.Josh.Velocity
         public int burst; // 0 - semi | 1 - auto | 2 - burst
         public int pellets;
         public int clipsize;
+        public int maxClip;
         public float firerate;
         public float bloom;
         public float recoil;
         public float kickback; 
         public float aimSpeed;
         public float reload;
-        
+        public float pump;
+        [Range(0, 1)] public float mainFOV;
+        [Range(0, 1)] public float weaponFOV;
         public GameObject prefab;
 
         private int stash; //current ammo
-        private int clip; //current clip
+        [HideInInspector] public int clip; //current clip
 
         public void Initialize()
         {

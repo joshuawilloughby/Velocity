@@ -22,7 +22,13 @@ namespace Com.Josh.Velocity
         private int currentIndex;
         public GameObject currentWeapon;
 
+        private Image hitmarkerImage;
+        private float hitmarkerWait;
+
         private bool isReloading = false;
+        private bool isPumping = false;
+
+        private Color CLEARWHITE = new Color(1, 1, 1, 0);
 
         #endregion
 
@@ -31,6 +37,8 @@ namespace Com.Josh.Velocity
         private void Start()
         {
             foreach (Gun a in loadout) a.Initialize();
+            hitmarkerImage = GameObject.Find("HUD/Hitmarker/Image").GetComponent<Image>();
+            hitmarkerImage.color = CLEARWHITE;
             Equip(0);
         }
 
@@ -51,6 +59,18 @@ namespace Com.Josh.Velocity
                 photonView.RPC("Equip", RpcTarget.All, 2);
             }
 
+            /*
+            if (photonView.IsMine && Input.GetKeyDown(KeyCode.Alpha4))
+            {
+                photonView.RPC("Equip", RpcTarget.All, 3);
+            }
+
+            if (photonView.IsMine && Input.GetKeyDown(KeyCode.Alpha5))
+            {
+                photonView.RPC("Equip", RpcTarget.All, 4);
+            }
+            */
+
             if (currentWeapon != null)
             {
                 if (photonView.IsMine)
@@ -64,7 +84,11 @@ namespace Com.Josh.Velocity
                             if (loadout[currentIndex].FireBullet())
                             {
                                 photonView.RPC("Shoot", RpcTarget.All);
-                                Pump();
+
+                                if (loadout[currentIndex].pump > 0)
+                                {
+                                    StartCoroutine(Pump(loadout[currentIndex].pump));
+                                }     
                             }
                             else
                             {
@@ -87,8 +111,9 @@ namespace Com.Josh.Velocity
                         }
                     }
 
-                    if (Input.GetKey(KeyCode.R) && !isReloading)
+                    if (Input.GetKey(KeyCode.R) && !isReloading && !isPumping && currentGunData.clip < currentGunData.maxClip)
                     {
+                        Debug.Log(currentGunData.clip);
                         photonView.RPC("ReloadRPC", RpcTarget.All);
                     }
 
@@ -101,6 +126,18 @@ namespace Com.Josh.Velocity
 
                 //weapon position elasticity
                 currentWeapon.transform.localPosition = Vector3.Lerp(currentWeapon.transform.localPosition, Vector3.zero, Time.deltaTime * 4f);
+
+                if(photonView.IsMine)
+                {
+                    if(hitmarkerWait > 0)
+                    {
+                        hitmarkerWait -= Time.deltaTime;
+                    }
+                    else if(hitmarkerImage.color.a > 0)
+                    {
+                        hitmarkerImage.color = Color.Lerp(hitmarkerImage.color, CLEARWHITE, Time.deltaTime * 4f);
+                    }
+                }
                      
             }
         }
@@ -136,20 +173,19 @@ namespace Com.Josh.Velocity
             isReloading = false;
         }
 
-        private void Pump ()
+        IEnumerator Pump (float p_wait)
         {
-            if (currentWeapon.transform.Find("Anchor/Design/Pump").GetComponent<Animator>())
-            {
-                currentWeapon.transform.Find("Anchor/Design/Pump").gameObject.SetActive(true);
+            isPumping = true;
+            currentWeapon.transform.Find("Anchor/Design/Reload").gameObject.SetActive(false);
+            currentWeapon.transform.Find("Anchor/Design/Pump").gameObject.SetActive(true);
 
-                currentWeapon.transform.Find("Anchor/Design/Pump").GetComponent<Animator>().Play("Pump", 0, 0);
-            }
-            else
-            {
-                return;
-            }
+            currentWeapon.transform.Find("Anchor/Design/Pump").GetComponent<Animator>().Play("Pump", 0, 0);
+           
+            yield return new WaitForSeconds(p_wait);
 
             currentWeapon.transform.Find("Anchor/Design/Pump").gameObject.SetActive(false);
+            currentWeapon.transform.Find("Anchor/Design/Reload").gameObject.SetActive(true);
+            isPumping = false;
         }
 
         [PunRPC]
@@ -157,6 +193,8 @@ namespace Com.Josh.Velocity
         {
             if (currentWeapon != null)
             {
+                Debug.Log("MaxClip: " + currentGunData.maxClip);
+                Debug.Log("CurrentClip: " + currentGunData.clip);
                 if (isReloading)
                 {
                     StopCoroutine("Reload");
@@ -171,8 +209,23 @@ namespace Com.Josh.Velocity
             temp_newEquipment.transform.localEulerAngles = Vector3.zero;
             temp_newEquipment.GetComponent<Sway>().isMine = photonView.IsMine;
 
+            if (photonView.IsMine)
+            {
+                ChangeLayersRecursively(temp_newEquipment, 10);
+            }
+            else
+            {
+                ChangeLayersRecursively(temp_newEquipment, 0);
+            }
+
             currentWeapon = temp_newEquipment;
             currentGunData = loadout[p_ind];
+        }
+
+        private void ChangeLayersRecursively (GameObject p_target, int p_layer)
+        {
+            p_target.layer = p_layer;
+            foreach (Transform a in p_target.transform) ChangeLayersRecursively(a.gameObject, p_layer);
         }
 
         public bool Aim(bool p_isAiming)
@@ -238,6 +291,18 @@ namespace Com.Josh.Velocity
                         {
                             //RPC Call to damage player
                             temp_hit.collider.transform.root.gameObject.GetPhotonView().RPC("TakeDamage", RpcTarget.All, loadout[currentIndex].damage);
+
+                            //show hitmarker
+                            hitmarkerImage.color = Color.white;
+                            hitmarkerWait = 0.5f;
+                        }
+
+                        //shooting target
+                        if (temp_hit.collider.transform.gameObject.layer == 12)
+                        {
+                            //show hitmarker
+                            hitmarkerImage.color = Color.white;
+                            hitmarkerWait = 0.5f;
                         }
                     }
                 }
